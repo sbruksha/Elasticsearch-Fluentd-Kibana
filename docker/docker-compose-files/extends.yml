@@ -1,0 +1,65 @@
+version: '2'
+networks:
+  prodnetwork:
+    driver: bridge
+
+volumes:
+  registry-stuff:
+    driver: local
+    
+services:
+    fluentd:
+        container_name: fluentd
+        image: eodessa/fluentd:latest
+        volumes:
+          - ./../../fluentd/fluent.conf:/fluentd/etc/fluent.conf
+        networks:
+          - prodnetwork
+        ports:
+          - "24224:24224"
+          - "24224:24224/udp"
+        logging:
+          driver: "json-file"
+          options:
+            max-size: 100m
+            max-file: "5"
+        
+    elasticsearch:
+        container_name: elasticsearch
+        image: eodessa/elasticsearch:latest
+        ports:
+          - "9200:9200"
+          - "9300:9300"
+        environment:
+          ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+          ELASTIC_USERNAME: "elastic"
+          ELASTIC_PASSWORD: "changeme"
+          http.cors.enabled: "true"
+          http.cors.allow-origin: "*"
+        expose:
+          - 9200
+        networks:
+          - prodnetwork
+    kibana:
+        container_name: kibana
+        image: eodessa/kibana:latest
+        environment:
+          SERVER_NAME: kibana
+          ELASTICSEARCH_URL: http://elasticsearch:9200
+        networks:
+          - prodnetwork
+        ports:
+          - "5601:5601"
+    nginx:
+        container_name: nginx
+        image: eodessa/nginx:latest
+        #build: ./../../nginx/
+        networks:
+          - prodnetwork
+        ports:
+          - "80:80"
+        logging:
+          driver: "fluentd"
+          options:
+            fluentd-address: fluentd:24224
+            tag: docker.{{.FullID}}
